@@ -67,6 +67,7 @@ int main() {
     int ch;
 
     // Изначальная отрисовка
+    refresh();
     draw_menu(menu_win, highlight);
     draw_content(content_win, content[highlight]);
 
