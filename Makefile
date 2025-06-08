@@ -24,6 +24,9 @@ $(TARGET): $(OBJ)
 obj/%.o: src/%.c | obj
 	$(CC) $(CFLAGS) -c $< -o $@
 
+obj:
+	mkdir -p obj
+
 # Очистка (удаление .o и исполняемого файла)
 clean:
 	rm -f $(OBJ) $(TARGET)
