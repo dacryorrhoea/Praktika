@@ -1,15 +1,17 @@
 CC = gcc
 
-CFLAGS = -Wall -Wextra -pedantic -std=c11 -g
+CFLAGS = -Wall -Wextra  -Iinclude -pedantic -std=c11 -g
 
 LDLIBS = -lncursesw -lm
 
 TARGET = frequency_analysis_app
 
-SRC = src/main.c
+SRC = $(wildcard src/*.c)
+
+CC = gcc
+
 
 # Объектные файлы (.o)
-# OBJ = $(SRC:.c=.o)
 OBJ = $(patsubst src/%.c, obj/%.o, $(SRC))
 
 
