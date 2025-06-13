@@ -2,7 +2,7 @@ CC = gcc
 
 CFLAGS = -Wall -Wextra -pedantic -std=c11 -g
 
-LDLIBS = -lncursesw
+LDLIBS = -lncursesw -lm
 
 TARGET = frequency_analysis_app
 

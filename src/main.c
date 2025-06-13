@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <wchar.h>
+#include <math.h>
 
 typedef struct {
     wchar_t letter;
@@ -119,7 +120,7 @@ void encryption(size_t alphabet_length, int alphabet_first_char) {
     }
 
 
-    FILE *src = fopen("./data/pushkin-metel.txt", "rb");
+    FILE *src = fopen("./data/voyna_i_mir.txt", "rb");
     FILE *tmp = fopen("./data/shifr.txt", "wb");
     if (!src || !tmp) DIE("some troubles with files");
 
@@ -166,7 +167,7 @@ void decryption_with_key(size_t alphabet_length) {
     // read key
     int **key = (int **)alloc_matrix(2, alphabet_length, sizeof(int));
 
-    FILE *tmp = fopen("./data/key.txt", "rb");
+    FILE *tmp = fopen("./data/key1.txt", "rb");
     if (!tmp) DIE("some troubles with files");
 
     int curr_symb = 0;
@@ -243,13 +244,18 @@ int get_unicode_hash(wchar_t symb, int table_size) {
 
 HashTable *create_hash_table(int size) {
     HashTable *table = malloc(sizeof(HashTable));
+    if(!table) DIE("trubble with alloc for hashTable");
+
     table->buckets = calloc(size, sizeof(HashNode *));
+    if(!table) DIE("trubble with alloc for buckets hashTable");
+
     table->size = size;
+
     return table;
 }
 
 void hash_table_insert(HashTable *table, wchar_t symb) {
-    int i = unicode_hash(symb, table->size);
+    int i = get_unicode_hash(symb, table->size);
     HashNode *node = malloc(sizeof(HashNode));
     node->symbol = symb;
     node->count = 0;
@@ -258,7 +264,7 @@ void hash_table_insert(HashTable *table, wchar_t symb) {
 }
 
 int hash_table_contains_and_increment(HashTable *table, wchar_t symb) {
-    int i = unicode_hash(symb, table->size);
+    int i = get_unicode_hash(symb, table->size);
     HashNode *curr = table->buckets[i];
     while (curr) {
         if (curr->symbol == symb) {
@@ -267,19 +273,40 @@ int hash_table_contains_and_increment(HashTable *table, wchar_t symb) {
         }
         curr = curr->next;
     }
+
     return 0;
 }
 
+size_t hash_table_contains_and_return_count(HashTable *table, wchar_t symb) {
+    int i = get_unicode_hash(symb, table->size);
+    HashNode *curr = table->buckets[i];
+    while (curr) {
+        if (curr->symbol == symb) {
+            return curr->count;
+        }
+        curr = curr->next;
+    }
 
-int main() {
-    setlocale(LC_ALL, "");
-    srand((unsigned) time(NULL));
+    return 0;
+}
 
-    // alphabet_length = (size_t)alphabet_length;
-    // encryption(alphabet_length, alphabet_first_char);
-    // decryption_with_key(alphabet_length);
+void free_hash_table(HashTable *table) {
+    for (size_t i = 0; i < table -> size; i++) {
+        if (table -> buckets[i]) {
+            HashNode *curr = table -> buckets[i];
+            while (curr) {
+                HashNode *tmp = curr;
+                curr = curr -> next;
+                free(tmp);
+            };
+        }
+    }
+    free(table -> buckets);
+    free(table);
+}
 
 
+void decryption_without_key() {
     // якобы выбрали russian в меню
     // 
     // read letter frequencies
@@ -289,9 +316,13 @@ int main() {
     );
 
 
-    // create empty counter for symbols
-    int *symbols_counter = (int *)calloc(alphabet_length, sizeof(int));
-    if (!symbols_counter) DIE('symbols_counter: error calloc');
+    HashTable *hash_tbl_counter = (HashTable *)create_hash_table(200);
+
+    for (size_t i = 0; i < alphabet_length; i++) {
+        hash_table_insert(hash_tbl_counter, reference_frequency[i].letter);
+        hash_table_insert(hash_tbl_counter, reference_frequency[i].letter + 32);
+    };
+
 
     // counting symbols in cryption text
     FILE *file = fopen("./data/shifr.txt", "rb");
@@ -299,32 +330,172 @@ int main() {
 
     int curr_symb = 0;
     while ((curr_symb = fgetwc(file)) != EOF) {
-        if (curr_symb < 0x0410 || curr_symb > 0x044F) continue;
-
-        for (size_t i = 0; i < alphabet_length; i++) {
-            if (
-                curr_symb == reference_frequency[i].letter ||
-                curr_symb == reference_frequency[i].letter + 32
-            ) {
-                symbols_counter[i]++;
-                break;
-            }
-        }
+        hash_table_contains_and_increment(hash_tbl_counter, curr_symb);
     }
 
     fclose(file);
 
 
     // calculation of pearson's square
-    int letters_count = 0;
+    LetterFreq *source_frequency = (LetterFreq *)xmalloc(
+        alphabet_length, sizeof(LetterFreq)
+    );
+
+    size_t full_count = 0;
     for (size_t i = 0; i < alphabet_length; i++) {
-        letters_count += symbols_counter[1][i];
+        size_t count = 0;
+        count += hash_table_contains_and_return_count(
+            hash_tbl_counter, reference_frequency[i].letter
+        );
+        count += hash_table_contains_and_return_count(
+            hash_tbl_counter, reference_frequency[i].letter + 32
+        );
+
+        full_count += count;
+
+        source_frequency[i].letter = reference_frequency[i].letter;
+        source_frequency[i].frequency = (float)count;
+    };
+
+    for (size_t i = 0; i < alphabet_length; i++) {
+        source_frequency[i].frequency /= full_count;
+        source_frequency[i].frequency *= 100;
+    };    
+
+
+    // euclidean distance square
+    float euclidean_distance_square = 0;
+    for (size_t i = 0; i < alphabet_length; i++) {
+        euclidean_distance_square += pow(
+            source_frequency[i].frequency / 100 - reference_frequency[i].frequency / 100, 2
+        ); 
+    };
+
+    // Percentage of similarity according to Euclidean distance.
+    wprintf(L"%.2f%%", (1 - euclidean_distance_square / 2) * 100);
+
+    for (size_t i = 0; i < 32; i++) {
+        for (size_t j = 0; j < 31; j++) {
+            if (source_frequency[j].frequency < source_frequency[j + 1].frequency) {
+                float temp = source_frequency[j].frequency;
+                source_frequency[j].frequency = source_frequency[j + 1].frequency;
+                source_frequency[j + 1].frequency = temp;
+                
+                wchar_t temp1 = source_frequency[j].letter;
+                source_frequency[j].letter = source_frequency[j + 1].letter;
+                source_frequency[j + 1].letter = temp1;
+            }
+        }
+    }
+
+    
+    // key variants
+    wchar_t **key_variants = (wchar_t **)alloc_matrix(alphabet_length, 5, sizeof(wchar_t));
+
+    // 1 column
+    for (size_t j = 0; j < 5; j++) {
+        key_variants[0][j] = source_frequency[j].letter;
+    }
+
+    //  n column
+    for (size_t j = 0; j < 5; j++) {
+        key_variants[alphabet_length - 1][j] = source_frequency[alphabet_length - 1 - j].letter;
+    }
+
+    // 2 column
+    key_variants[1][0] = source_frequency[1].letter;
+    int k = 0;
+    for (size_t j = 1; j < 5; j++) {
+        if (k == 1) k++;
+        key_variants[1][j] = source_frequency[k].letter;
+        k++;
+    }
+
+    // n - 1 column
+    key_variants[alphabet_length - 2][0] = source_frequency[alphabet_length - 2].letter;
+    k = alphabet_length - 1;
+    for (size_t j = 1; j < 5; j++) {
+        if (k == alphabet_length - 2) k--;
+        key_variants[alphabet_length - 2][j] = source_frequency[k].letter;
+        k--;
+    }
+    
+    for (int i = 2; i < (int)alphabet_length - 2; i++) {
+        int shift = 0;
+        for (int j = 0; j < 5; j++) {
+            key_variants[i][j] = source_frequency[i + shift].letter;
+            if (shift >= 0) shift++;
+            shift *= -1;
+        }
+    }
+    
+
+    wprintf(L"\n");
+    for (size_t i = 0; i < alphabet_length; i++) {
+        wprintf(L"%lc --- %.2lf", reference_frequency[i].letter, reference_frequency[i].frequency);
+        wprintf(L" | %lc --- %.2lf\n", source_frequency[i].letter, source_frequency[i].frequency);
     }
 
 
+    for (size_t j = 0; j < 5; j++) {
+        for (size_t i = 0; i < alphabet_length; i++) {
+            wprintf(L"%lc ", key_variants[i][j]);
+        }
+        wprintf(L"\n");
+    }
+
+
+    // write key to file
+    // FILE *tempe = fopen("./data/key1.txt", "wb");
+    // if (!tempe) DIE("some troubles with files");
+    // for (size_t j = 0; j < alphabet_length; j++) {
+    //     fputwc(reference_frequency[j].letter, tempe);
+    // }
+    // fputwc('\n', tempe);
+    // for (size_t j = 0; j < alphabet_length; j++) {
+    //     fputwc(source_frequency[j].letter, tempe);
+    // }
+    // fclose(tempe);
+
+    // decryption_with_key(32);
+
+
+    // pearson correlation
+    float sum_x = 0.0, sum_y = 0.0, sum_x2 = 0.0, sum_y2 = 0.0, sum_xy = 0.0;
+
+    for (size_t i = 0; i < alphabet_length; ++i) {
+        sum_x += source_frequency[i].frequency;
+        sum_y += reference_frequency[i].frequency;
+        sum_x2 += pow(source_frequency[i].frequency, 2);
+        sum_y2 += pow(reference_frequency[i].frequency, 2);
+        sum_xy += source_frequency[i].frequency * reference_frequency[i].frequency;
+    }
+
+    float numerator = sum_xy - (sum_x * sum_y) / alphabet_length;
+    float denominator = sqrt((sum_x2 - (sum_x * sum_x) / alphabet_length) *
+                             (sum_y2 - (sum_y * sum_y) / alphabet_length));
+
+    if (!denominator) DIE("err");
+    wprintf(L"\n%.2f%%", numerator / denominator * 100);
+
+
+    free_hash_table(hash_tbl_counter);
+
+    free(source_frequency);
     free(reference_frequency);
+    free_matrix(key_variants, 2);
+}
+
+
+int main() {
+    setlocale(LC_ALL, "");
+    srand((unsigned) time(NULL));
+
+    // encryption(32, 0x0410);
+    // decryption_with_key(32);
+    decryption_without_key();
+    
     // free(letters_frequency_crypto);
-    free_matrix(symbols_counter, 2);
     return 0;
 
     // initscr();
