@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 #include <locale.h>
-#include <string.h>
 #include <stdlib.h>
 #include <wchar.h>
 #include <math.h>
