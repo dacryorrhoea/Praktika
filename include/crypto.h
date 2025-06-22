@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-void encryption(size_t alphabet_length, int alphabet_first_char);
-void decryption_with_key(size_t alphabet_length);
+char* encryption(char* filename);
+char* decryption_with_key(char* shifr_filename, char* key_filename);
 
 #endif

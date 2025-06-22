@@ -8,8 +8,11 @@
 #include <time.h>
 
 
-void encryption(size_t alphabet_length, int alphabet_first_char) {
+char* encryption(char* filename) {
     srand((unsigned) time(NULL));
+    size_t alphabet_length = 32;
+    int alphabet_first_char = 0x0410;
+    char filepath[512];
 
     //  first step -> keygen
     int **key = (int **)alloc_matrix(2, alphabet_length, sizeof(int));
@@ -30,9 +33,12 @@ void encryption(size_t alphabet_length, int alphabet_first_char) {
         key[1][j] = tmp;
     }
 
+    snprintf(filepath, sizeof(filepath), "./data/%s", filename);
+    FILE *src = fopen(filepath, "rb");
 
-    FILE *src = fopen("./data/voyna_i_mir.txt", "rb");
-    FILE *tmp = fopen("./data/shifr.txt", "wb");
+    snprintf(filepath, sizeof(filepath), "./data/shifr_%s", filename);
+    FILE *tmp = fopen(filepath, "wb");
+
     if (!src || !tmp) DIE("some troubles with files");
 
     // read character by character, encoding the matching ones
@@ -60,8 +66,11 @@ void encryption(size_t alphabet_length, int alphabet_first_char) {
 
 
     // write key to file
-    tmp = fopen("./data/key.txt", "wb");
+    snprintf(filepath, sizeof(filepath), "./data/key_%s", filename);
+    tmp = fopen(filepath, "wb");
+
     if (!tmp) DIE("some troubles with files");
+
     for (size_t i = 0; i < 2; i++) {
         for (size_t j = 0; j < alphabet_length; j++) {
             fputwc(key[i][j], tmp);
@@ -71,14 +80,22 @@ void encryption(size_t alphabet_length, int alphabet_first_char) {
     fclose(tmp);
 
     free_matrix(key, 2);
+
+    char* filepath_shifr = (char*)xmalloc(512, sizeof(char));
+    snprintf(filepath_shifr, 512 * sizeof(char), "shifr_%s", filename);
+    return filepath_shifr;
 }
 
 
-void decryption_with_key(size_t alphabet_length) {
+char* decryption_with_key(char* shifr_filename, char* key_filename) {
     // read key
+    size_t alphabet_length = 32;
+    char filepath[512];
     int **key = (int **)alloc_matrix(2, alphabet_length, sizeof(int));
 
-    FILE *tmp = fopen("./data/key1.txt", "rb");
+    snprintf(filepath, sizeof(filepath), "./data/%s", key_filename);
+    FILE *tmp = fopen(filepath, "rb");
+
     if (!tmp) DIE("some troubles with files");
 
     int curr_symb = 0;
@@ -96,9 +113,12 @@ void decryption_with_key(size_t alphabet_length) {
 
     fclose(tmp);
     
+    snprintf(filepath, sizeof(filepath), "./data/%s", shifr_filename);
+    FILE *src = fopen(filepath, "rb");
 
-    FILE *src = fopen("./data/shifr.txt", "rb");
-    tmp = fopen("./data/temp_deshifr.txt", "wb");
+    snprintf(filepath, sizeof(filepath), "./data/de%s", shifr_filename);
+    tmp = fopen(filepath, "wb");
+
     if (!src || !tmp) DIE("some troubles with files");
 
     curr_symb = 0;
@@ -126,4 +146,8 @@ void decryption_with_key(size_t alphabet_length) {
 
     free_matrix(key, 2);
     key = NULL;
+
+    char* filepath_deshifr = (char*)xmalloc(512, sizeof(char));
+    snprintf(filepath_deshifr, 512 * sizeof(char), "de%s", shifr_filename);
+    return filepath_deshifr;
 }

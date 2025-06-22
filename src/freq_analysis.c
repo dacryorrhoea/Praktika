@@ -34,7 +34,7 @@ void *read_letters_freq_from_bin(const char *filename, size_t *out_count) {
 }
 
 
-void decryption_without_key() {
+char* decryption_without_key(char* shifr_filename) {
     // якобы выбрали russian в меню
     // 
     // read letter frequencies
@@ -53,7 +53,11 @@ void decryption_without_key() {
 
 
     // counting symbols in cryption text
-    FILE *file = fopen("./data/shifr.txt", "rb");
+    char filepath[512];
+
+    snprintf(filepath, sizeof(filepath), "./data/%s", shifr_filename);
+    FILE *file = fopen(filepath, "rb");
+
     if (!file) DIE("some troubles with files");
 
     int curr_symb = 0;
@@ -158,53 +162,52 @@ void decryption_without_key() {
     }
     
 
-    wprintf(L"\n");
-    for (size_t i = 0; i < alphabet_length; i++) {
-        wprintf(L"%lc --- %.2lf", reference_frequency[i].letter, reference_frequency[i].frequency);
-        wprintf(L" | %lc --- %.2lf\n", source_frequency[i].letter, source_frequency[i].frequency);
-    }
+    // wprintf(L"\n");
+    // for (size_t i = 0; i < alphabet_length; i++) {
+    //     wprintf(L"%lc --- %.2lf", reference_frequency[i].letter, reference_frequency[i].frequency);
+    //     wprintf(L" | %lc --- %.2lf\n", source_frequency[i].letter, source_frequency[i].frequency);
+    // }
 
 
-    for (size_t j = 0; j < 5; j++) {
-        for (size_t i = 0; i < alphabet_length; i++) {
-            wprintf(L"%lc ", key_variants[i][j]);
-        }
-        wprintf(L"\n");
-    }
+    // for (size_t j = 0; j < 5; j++) {
+    //     for (size_t i = 0; i < alphabet_length; i++) {
+    //         wprintf(L"%lc ", key_variants[i][j]);
+    //     }
+    //     wprintf(L"\n");
+    // }
 
 
     // write key to file
-    // FILE *tempe = fopen("./data/key1.txt", "wb");
-    // if (!tempe) DIE("some troubles with files");
-    // for (size_t j = 0; j < alphabet_length; j++) {
-    //     fputwc(reference_frequency[j].letter, tempe);
-    // }
-    // fputwc('\n', tempe);
-    // for (size_t j = 0; j < alphabet_length; j++) {
-    //     fputwc(source_frequency[j].letter, tempe);
-    // }
-    // fclose(tempe);
-
-    // decryption_with_key(32);
+    snprintf(filepath, sizeof(filepath), "./data/FA_key_%s", shifr_filename);
+    FILE *tempe = fopen(filepath, "wb");
+    if (!tempe) DIE("some troubles with files");
+    for (size_t j = 0; j < alphabet_length; j++) {
+        fputwc(reference_frequency[j].letter, tempe);
+    }
+    fputwc('\n', tempe);
+    for (size_t j = 0; j < alphabet_length; j++) {
+        fputwc(source_frequency[j].letter, tempe);
+    }
+    fclose(tempe);
 
 
     // pearson correlation
-    float sum_x = 0.0, sum_y = 0.0, sum_x2 = 0.0, sum_y2 = 0.0, sum_xy = 0.0;
+    // float sum_x = 0.0, sum_y = 0.0, sum_x2 = 0.0, sum_y2 = 0.0, sum_xy = 0.0;
 
-    for (size_t i = 0; i < alphabet_length; ++i) {
-        sum_x += source_frequency[i].frequency;
-        sum_y += reference_frequency[i].frequency;
-        sum_x2 += pow(source_frequency[i].frequency, 2);
-        sum_y2 += pow(reference_frequency[i].frequency, 2);
-        sum_xy += source_frequency[i].frequency * reference_frequency[i].frequency;
-    }
+    // for (size_t i = 0; i < alphabet_length; ++i) {
+    //     sum_x += source_frequency[i].frequency;
+    //     sum_y += reference_frequency[i].frequency;
+    //     sum_x2 += pow(source_frequency[i].frequency, 2);
+    //     sum_y2 += pow(reference_frequency[i].frequency, 2);
+    //     sum_xy += source_frequency[i].frequency * reference_frequency[i].frequency;
+    // }
 
-    float numerator = sum_xy - (sum_x * sum_y) / alphabet_length;
-    float denominator = sqrt((sum_x2 - (sum_x * sum_x) / alphabet_length) *
-                             (sum_y2 - (sum_y * sum_y) / alphabet_length));
+    // float numerator = sum_xy - (sum_x * sum_y) / alphabet_length;
+    // float denominator = sqrt((sum_x2 - (sum_x * sum_x) / alphabet_length) *
+    //                          (sum_y2 - (sum_y * sum_y) / alphabet_length));
 
-    if (!denominator) DIE("err");
-    wprintf(L"\n%.2f%%", numerator / denominator * 100);
+    // if (!denominator) DIE("err");
+    // wprintf(L"\n%.2f%%", numerator / denominator * 100);
 
 
     free_hash_table(hash_tbl_counter);
@@ -212,4 +215,8 @@ void decryption_without_key() {
     free(source_frequency);
     free(reference_frequency);
     free_matrix(key_variants, 2);
+    
+    char* filepath_deshifr = (char*)xmalloc(512, sizeof(char));
+    snprintf(filepath_deshifr, 512 * sizeof(char), "FA_key_%s", shifr_filename);
+    return filepath_deshifr;
 }
