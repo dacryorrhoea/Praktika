@@ -13,6 +13,10 @@
 static WINDOW *menu_win;
 static WINDOW *content_win;
 
+int operation_selecting() {
+
+}
+
 void init_ui() {
     setlocale(LC_ALL, "");
     initscr();
