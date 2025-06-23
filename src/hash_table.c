@@ -1,24 +1,10 @@
 #include "utils.h"
+#include "hash_table.h"
 
 #include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
-
-
-// node for store symbol and counter
-typedef struct HashNode {
-    wchar_t symbol;
-    size_t count;
-    struct HashNode *next;
-} HashNode;
-
-// hash table
-typedef struct {
-    HashNode **buckets;
-    size_t size;
-} HashTable;
-
 
 int get_unicode_hash(wchar_t symb, int table_size) {
     return (symb * 2654435761) % table_size;
@@ -37,18 +23,17 @@ HashTable *create_hash_table(int size) {
     return table;
 }
 
-
-void hash_table_insert(HashTable *table, wchar_t symb) {
+void hash_table_insert(HashTable *table, wchar_t symb, wchar_t pair_symb) {
     int i = get_unicode_hash(symb, table->size);
     HashNode *node = malloc(sizeof(HashNode));
     node->symbol = symb;
     node->count = 0;
+    node->pair_symbol = pair_symb;
     node->next = table->buckets[i];
     table->buckets[i] = node;
 }
 
-
-int hash_table_contains_and_increment(HashTable *table, wchar_t symb) {
+int hash_table_increment(HashTable *table, wchar_t symb) {
     int i = get_unicode_hash(symb, table->size);
     HashNode *curr = table->buckets[i];
     while (curr) {
@@ -62,13 +47,12 @@ int hash_table_contains_and_increment(HashTable *table, wchar_t symb) {
     return 0;
 }
 
-
-size_t hash_table_contains_and_return_count(HashTable *table, wchar_t symb) {
+HashNode* hash_table_return(HashTable *table, wchar_t symb) {
     int i = get_unicode_hash(symb, table->size);
     HashNode *curr = table->buckets[i];
     while (curr) {
         if (curr->symbol == symb) {
-            return curr->count;
+            return curr;
         }
         curr = curr->next;
     }

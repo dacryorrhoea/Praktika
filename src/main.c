@@ -1,115 +1,120 @@
 #include "crypto.h"
-#include "freq_analysis.h"
+#include "utils.h"
 #include "interface.h"
 #include <ncurses.h>
-#include <dirent.h>
 #include <stdlib.h>
 
+#define FILE_ERROR_MSG "files open error"
+
+#define UI_TEXT_MSG_CRYPT "Выберите файл для дешифрации:\n"
+#define UI_TEXT_MSG_DECRYPT "Выберите файл для дешифрации:\n"
+#define UI_TEXT_MSG_KEY "Выберите файл с ключом:\n"
+
 #define MENU_ITEMS 3
-// static char** app_menu = NULL;
-
-static char* curr_filename;
-static char* app_content = NULL;
-
 static const char *menu_items[MENU_ITEMS] = {
     "Шифрация текста",
     "Дешифрация с помощью ключа",
     "Дешифрация с помощью метода частотного анализа"
 };
 
+static char* curr_filename = NULL;
+static char* app_content = NULL;
+static int content_offset = 0;
 
-void handle_menu_selection(int choice) {
-    switch (choice) {
-        case 0: {
-            char* filename = show_file_selector("Выберите файл для шифрации:\n");
-            if (filename) {
-                char* encrypton_file = encryption(filename);
-                char* file_text = read_file_content(encrypton_file);
-                if (file_text) {
-                    curr_filename = encrypton_file;
-                    app_content = file_text;
-                } else {
-                    draw_content("", "Ошибка чтения файла.", 0);
-                }
-                free(filename);
-            }
-            break;
-        }
-        case 1: {
-            char* shifr_filename = show_file_selector("Выберите файл для дешифрации:\n");
-            char* key_filename = show_file_selector("Выберите с ключом для шифра:\n");
-            if (shifr_filename && key_filename) {
-                char* decrypton_file = decryption_with_key(shifr_filename, key_filename);
-                char* file_text = read_file_content(decrypton_file);
-                if (file_text) {
-                    curr_filename = decrypton_file;
-                    app_content = file_text;
-                } else {
-                    draw_content("", "Ошибка чтения файла.", 0);
-                }
-                free(shifr_filename);
-                free(key_filename);
-            }
-            break;
-        }
-        case 2: {
-            char* shifr_filename = show_file_selector("Выберите файл для дешифрации:\n");
-            if (shifr_filename) {
-                char* decrypton_file = decryption_without_key(shifr_filename);
-                char* file_text = read_file_content(decrypton_file);
-                if (file_text) {
-                    curr_filename = decrypton_file;
-                    app_content = file_text;
-                } else {
-                    draw_content("", "Ошибка чтения файла.", 0);
-                }
-                free(shifr_filename);
-            }
-            break;
-        }
-    }
+void load_and_display_file(char* filename) {
+    char* result = read_file_content(filename);
+    if (!result) DIE(FILE_ERROR_MSG);
+    
+    free(curr_filename);
+    free(app_content);
+    
+    curr_filename = filename;
+    app_content = result;
+
+    content_offset = 0;
 }
 
-
-void main() {
-    init_ui();
+void encrypt_file() {
+    char* filename = show_file_selector(UI_TEXT_MSG_CRYPT);
+    if (!filename) DIE(FILE_ERROR_MSG);
     
+    char* encrypted_file = encryption(filename);
+    load_and_display_file(encrypted_file);
+
+    free(filename);
+}
+
+void decrypt_with_key() {
+    char* enc_file = show_file_selector(UI_TEXT_MSG_DECRYPT);
+    if (!enc_file) DIE(FILE_ERROR_MSG);
+    
+    char* key_file = show_file_selector(UI_TEXT_MSG_KEY);
+    if (!key_file) {
+        free(enc_file);
+        DIE(FILE_ERROR_MSG);
+    }
+    
+    char* decrypted = decryption_with_key(enc_file, key_file);
+    load_and_display_file(decrypted);
+    
+    free(enc_file);
+    free(key_file);
+}
+
+void decrypt_without_key() {
+    char* enc_file = show_file_selector(UI_TEXT_MSG_DECRYPT);
+    if (!enc_file) DIE(FILE_ERROR_MSG);
+    
+    char* decrypted = decryption_without_key(enc_file);
+    load_and_display_file(decrypted);
+
+    free(enc_file);
+}
+
+int main() {
+    init_ui();
     int highlight = 0;
 
-    int content_offset = 0;
-    app_content = "";
-
     draw_menu(menu_items, MENU_ITEMS, highlight);
-    draw_content("", app_content, 10);
+    draw_content("", "", 0);
 
     int ch;
     while ((ch = getch()) != 'q') {
         switch (ch) {
             case KEY_UP:
-                highlight = (highlight - 1 + MENU_ITEMS) % MENU_ITEMS;
+                if (--highlight < 0) highlight = MENU_ITEMS - 1;
                 break;
             case KEY_DOWN:
-                highlight = (highlight + 1) % MENU_ITEMS;
+                if (++highlight >= MENU_ITEMS) highlight = 0;
                 break;
             case 'j':
-                if (app_content) content_offset += 1;
+                content_offset++;
                 break;
             case 'k':
-                if (app_content && content_offset > 0) content_offset -= 1;
+                if (content_offset > 0) content_offset--;
                 break;
             case 10:
-                handle_menu_selection(highlight);
-                content_offset = 0;
+                switch (highlight) {
+                    case 0: encrypt_file(); break;
+                    case 1: decrypt_with_key(); break;
+                    case 2: decrypt_without_key(); break;
+                }
                 break;
             case KEY_RESIZE:
                 resize_ui();
                 break;
-        };
+        }
         draw_menu(menu_items, MENU_ITEMS, highlight);
-        draw_content(curr_filename?curr_filename:"", app_content, content_offset);
+        if (app_content) {
+            draw_content(curr_filename, app_content, content_offset);         
+        } else {
+            draw_content("", "", 0);   
+        }
+        
     }
     
     close_ui();
     free(app_content);
     free(curr_filename);
+    return 0;
 }

@@ -4,16 +4,22 @@
 #include <stddef.h>
 #include <wchar.h>
 
-typedef struct HashTable HashTable;
+typedef struct HashNode {
+    wchar_t symbol;
+    wchar_t pair_symbol;
+    size_t count;
+    struct HashNode *next;
+} HashNode;
 
-int get_unicode_hash(wchar_t symb, int table_size);
+typedef struct {
+    HashNode **buckets;
+    size_t size;
+} HashTable;
 
 HashTable *create_hash_table(int size);
-void hash_table_insert(HashTable *table, wchar_t symb);
-
-int hash_table_contains_and_increment(HashTable *table, wchar_t symb);
-size_t hash_table_contains_and_return_count(HashTable *table, wchar_t symb);
-
+void hash_table_insert(HashTable *table, wchar_t symb, wchar_t pair_symb);
+int hash_table_increment(HashTable *table, wchar_t symb);
+HashNode* hash_table_return(HashTable *table, wchar_t symb);
 void free_hash_table(HashTable *table);
 
 #endif

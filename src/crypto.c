@@ -1,110 +1,119 @@
 #include "utils.h"
-
+#include "hash_table.h"
+#include "crypto.h"
 #include <stdio.h>
 #include <locale.h>
+#include <string.h>
 #include <stdlib.h>
 #include <wchar.h>
 #include <math.h>
 #include <time.h>
 
+#define ALPHABET_LENGTH 32
+#define ALPHABET_FIRST_SYMB 0x0410
 
-char* encryption(char* filename) {
-    srand((unsigned) time(NULL));
-    size_t alphabet_length = 32;
-    int alphabet_first_char = 0x0410;
+typedef struct {
+    wchar_t letter;
+    float frequency;
+} LetterFreq;
+
+
+FILE* open_file(char* prefix, char* filename, char* cmd) {
     char filepath[512];
 
-    //  first step -> keygen
-    int **key = (int **)alloc_matrix(2, alphabet_length, sizeof(int));
+    snprintf(filepath, sizeof(filepath), prefix, filename);
+    FILE* file = fopen(filepath, cmd);
 
+    if (!file) DIE("some troubles with files");
 
-    int curr_char = alphabet_first_char;
-    for (size_t i = 0; i < alphabet_length; i++) {
-        key[0][i] = key[1][i] = curr_char;
-        curr_char++;
+    return file;
+}
+
+LetterFreq* read_letters_freq(char *lang) {
+    FILE *file = open_file(
+        "./data/frequency/%s_frequency.bin", lang, "rb"
+    );
+
+    size_t n;
+    fread(&n, sizeof(size_t), 1, file);
+
+    LetterFreq* freq = (LetterFreq*)xmalloc(n, sizeof(LetterFreq));
+    fread(freq, sizeof(LetterFreq), n, file);
+    
+    fclose(file);
+
+    return freq;
+}
+
+char* encryption(char* filename) {
+    wchar_t** key = (wchar_t**)alloc_matrix(
+        2, ALPHABET_LENGTH, sizeof(wchar_t)
+    );
+    for (int i = 0; i < ALPHABET_LENGTH; i++) {
+        key[0][i] = ALPHABET_FIRST_SYMB + i;
+        key[1][i] = ALPHABET_FIRST_SYMB + i;
     }
 
-    
-    // fisher yates shuffle
-    for (size_t i = alphabet_length - 1; i > 0; i--) {
-        size_t j = rand() % (i + 1);
-        int tmp = key[1][i];
+    srand((unsigned) time(NULL));
+    for (int i = ALPHABET_LENGTH - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        wchar_t tmp = key[1][i];
         key[1][i] = key[1][j];
         key[1][j] = tmp;
     }
 
-    snprintf(filepath, sizeof(filepath), "./data/%s", filename);
-    FILE *src = fopen(filepath, "rb");
+    
+    HashTable *hash_tbl = (HashTable *)create_hash_table(200);
+    for (int i = 0; i < ALPHABET_LENGTH; i++) {
+        hash_table_insert(hash_tbl, key[0][i], key[1][i]);
+        hash_table_insert(hash_tbl, key[0][i] + 32, key[1][i] + 32);
+    };
 
-    snprintf(filepath, sizeof(filepath), "./data/shifr_%s", filename);
-    FILE *tmp = fopen(filepath, "wb");
+    FILE *src = open_file("./data/%s", filename, "rb");
+    FILE *tmp = open_file("./data/shifr_%s", filename, "wb");
 
-    if (!src || !tmp) DIE("some troubles with files");
-
-    // read character by character, encoding the matching ones
-    int curr_symb;
+    wchar_t curr_symb;
     while ((curr_symb = fgetwc(src)) != EOF) {
-        int founded = 0;
-
-        for (size_t i = 0; i < alphabet_length; i++) {
-            if (curr_symb == key[0][i]) {
-                fputwc(key[1][i], tmp);
-                founded = 1;
-                break;
-            } else if (curr_symb == key[0][i] + 32) {
-                fputwc(key[1][i] + 32, tmp);
-                founded = 1;
-                break;
-            }
-        }
-        
-        if (!founded) fputwc(curr_symb, tmp);
+        HashNode* symb_node = hash_table_return(hash_tbl, curr_symb);
+        fputwc(symb_node? symb_node->pair_symbol: curr_symb, tmp);
     }
 
+    free_hash_table(hash_tbl);
     fclose(src);
     fclose(tmp);
 
 
-    // write key to file
-    snprintf(filepath, sizeof(filepath), "./data/key_%s", filename);
-    tmp = fopen(filepath, "wb");
+    tmp = open_file("./data/key_%s", filename, "wb");
 
-    if (!tmp) DIE("some troubles with files");
+    fwprintf(tmp, L"%.*ls\n%.*ls\n", 
+        ALPHABET_LENGTH, key[0],
+        ALPHABET_LENGTH, key[1]
+    );
 
-    for (size_t i = 0; i < 2; i++) {
-        for (size_t j = 0; j < alphabet_length; j++) {
-            fputwc(key[i][j], tmp);
-        }
-        fputwc('\n', tmp);
-    }
     fclose(tmp);
-
     free_matrix(key, 2);
 
-    char* filepath_shifr = (char*)xmalloc(512, sizeof(char));
-    snprintf(filepath_shifr, 512 * sizeof(char), "shifr_%s", filename);
-    return filepath_shifr;
+
+    char* filepath_deshifr = (char*)xmalloc(
+        strlen(filename) + 7, sizeof(char)
+    );
+    sprintf(filepath_deshifr, "shifr_%s", filename);
+    return filepath_deshifr;
 }
 
 
 char* decryption_with_key(char* shifr_filename, char* key_filename) {
-    // read key
-    size_t alphabet_length = 32;
-    char filepath[512];
-    int **key = (int **)alloc_matrix(2, alphabet_length, sizeof(int));
+    wchar_t** key = (wchar_t**)alloc_matrix(
+        2, ALPHABET_LENGTH, sizeof(wchar_t)
+    );
+    FILE *tmp = open_file("./data/%s", key_filename, "rb");
 
-    snprintf(filepath, sizeof(filepath), "./data/%s", key_filename);
-    FILE *tmp = fopen(filepath, "rb");
-
-    if (!tmp) DIE("some troubles with files");
-
-    int curr_symb = 0;
-    size_t i = 0, j = 0;
+    wchar_t curr_symb;
+    int i = 0, j = 0;
 
     while ((curr_symb = fgetwc(tmp)) != EOF) {
         if (curr_symb != '\n') {
-            key[i][j] = curr_symb; // !then perform a length check!
-            j++;
+            key[i][j++] = curr_symb;
         } else {
             i++;
             j = 0;
@@ -112,42 +121,164 @@ char* decryption_with_key(char* shifr_filename, char* key_filename) {
     }
 
     fclose(tmp);
+
+    HashTable *hash_tbl = (HashTable *)create_hash_table(200);
+    for (int i = 0; i < ALPHABET_LENGTH; i++) {
+        hash_table_insert(hash_tbl, key[1][i], key[0][i]);
+        hash_table_insert(hash_tbl, key[1][i] + 32, key[0][i] + 32);
+    };
     
-    snprintf(filepath, sizeof(filepath), "./data/%s", shifr_filename);
-    FILE *src = fopen(filepath, "rb");
+    free_matrix(key, 2);
 
-    snprintf(filepath, sizeof(filepath), "./data/de%s", shifr_filename);
-    tmp = fopen(filepath, "wb");
 
-    if (!src || !tmp) DIE("some troubles with files");
+    FILE *src = open_file("./data/%s", shifr_filename, "rb");
+    tmp = open_file("./data/de%s", shifr_filename, "wb");
 
-    curr_symb = 0;
     while ((curr_symb = fgetwc(src)) != EOF) {
-        int founded = 0;
-
-        for (size_t i = 0; i < alphabet_length; i++) {
-            if (curr_symb == key[1][i]) {
-                fputwc(key[0][i], tmp);
-                founded = 1;
-                break;
-            } else if (curr_symb == key[1][i] + 32) {
-                fputwc(key[0][i] + 32, tmp);
-                founded = 1;
-                break;
-            }
-        }
-        
-        if (!founded) fputwc(curr_symb, tmp);
+        HashNode* symb_node = hash_table_return(hash_tbl, curr_symb);
+        fputwc(symb_node? symb_node->pair_symbol: curr_symb, tmp);
     }
-
 
     fclose(src);
     fclose(tmp);
+    free_hash_table(hash_tbl);
 
-    free_matrix(key, 2);
-    key = NULL;
 
+    char* filepath_deshifr = (char*)xmalloc(
+        strlen(shifr_filename) + 3, sizeof(char)
+    );
+    sprintf(filepath_deshifr, "de%s", shifr_filename);
+    return filepath_deshifr;
+}
+
+
+char* decryption_without_key(char* shifr_filename) {
+    LetterFreq *ref_freq = read_letters_freq("russian");
+
+    HashTable *hash_tbl = (HashTable *)create_hash_table(200);
+    for (size_t i = 0; i < ALPHABET_LENGTH; i++) {
+        hash_table_insert(hash_tbl, ref_freq[i].letter, "");
+        hash_table_insert(hash_tbl, ref_freq[i].letter + 32, "");
+    };
+
+
+    FILE *file = open_file("./data/%s", shifr_filename, "rb");
+
+    int curr_symb = 0;
+    while ((curr_symb = fgetwc(file)) != EOF) {
+        hash_table_increment(hash_tbl, curr_symb);
+    }
+
+    fclose(file);
+
+
+    LetterFreq* src_freq = (LetterFreq*)xmalloc(
+        ALPHABET_LENGTH, sizeof(LetterFreq)
+    );
+
+    size_t full_count = 0;
+    for (size_t i = 0; i < ALPHABET_LENGTH; i++) {
+        size_t count = 0;
+        count += hash_table_return(
+            hash_tbl, ref_freq[i].letter
+        )->count;
+        count += hash_table_return(
+            hash_tbl, ref_freq[i].letter + 32
+        )->count;
+
+        full_count += count;
+
+        src_freq[i].letter = ref_freq[i].letter;
+        src_freq[i].frequency = (float)count;
+    };
+
+    for (size_t i = 0; i < ALPHABET_LENGTH; i++) {
+        src_freq[i].frequency /= full_count;
+        src_freq[i].frequency *= 100;
+    };    
+
+
+    // euclidean distance square
+    float euclidean_distance_square = 0;
+    for (size_t i = 0; i < ALPHABET_LENGTH; i++) {
+        euclidean_distance_square += pow(
+            src_freq[i].frequency / 100 - ref_freq[i].frequency / 100, 2
+        ); 
+    };
+
+    // Percentage of similarity according to Euclidean distance.
+    wprintf(L"%.2f%%", (1 - euclidean_distance_square / 2) * 100);
+
+    for (size_t i = 0; i < 32; i++) {
+        for (size_t j = 0; j < 31; j++) {
+            if (src_freq[j].frequency < src_freq[j + 1].frequency) {
+                float temp = src_freq[j].frequency;
+                src_freq[j].frequency = src_freq[j + 1].frequency;
+                src_freq[j + 1].frequency = temp;
+                
+                wchar_t temp1 = src_freq[j].letter;
+                src_freq[j].letter = src_freq[j + 1].letter;
+                src_freq[j + 1].letter = temp1;
+            }
+        }
+    }
+
+    
+    
+    
+
+    // wprintf(L"\n");
+    // for (size_t i = 0; i < ALPHABET_LENGTH; i++) {
+    //     wprintf(L"%lc --- %.2lf", ref_freq[i].letter, ref_freq[i].frequency);
+    //     wprintf(L" | %lc --- %.2lf\n", src_freq[i].letter, src_freq[i].frequency);
+    // }
+
+
+    // for (size_t j = 0; j < 5; j++) {
+    //     for (size_t i = 0; i < ALPHABET_LENGTH; i++) {
+    //         wprintf(L"%lc ", key_variants[i][j]);
+    //     }
+    //     wprintf(L"\n");
+    // }
+
+
+    // write key to file`
+    FILE *tempe = open_file("./data/FA_key_%s", shifr_filename, "wb");
+    for (size_t j = 0; j < ALPHABET_LENGTH; j++) {
+        fputwc(ref_freq[j].letter, tempe);
+    }
+    fputwc('\n', tempe);
+    for (size_t j = 0; j < ALPHABET_LENGTH; j++) {
+        fputwc(src_freq[j].letter, tempe);
+    }
+    fclose(tempe);
+
+
+    // pearson correlation
+    // float sum_x = 0.0, sum_y = 0.0, sum_x2 = 0.0, sum_y2 = 0.0, sum_xy = 0.0;
+
+    // for (size_t i = 0; i < ALPHABET_LENGTH; ++i) {
+    //     sum_x += src_freq[i].frequency;
+    //     sum_y += ref_freq[i].frequency;
+    //     sum_x2 += pow(src_freq[i].frequency, 2);
+    //     sum_y2 += pow(ref_freq[i].frequency, 2);
+    //     sum_xy += src_freq[i].frequency * ref_freq[i].frequency;
+    // }
+
+    // float numerator = sum_xy - (sum_x * sum_y) / ALPHABET_LENGTH;
+    // float denominator = sqrt((sum_x2 - (sum_x * sum_x) / ALPHABET_LENGTH) *
+    //                          (sum_y2 - (sum_y * sum_y) / ALPHABET_LENGTH));
+
+    // if (!denominator) DIE("err");
+    // wprintf(L"\n%.2f%%", numerator / denominator * 100);
+
+
+    free_hash_table(hash_tbl);
+
+    free(src_freq);
+    free(ref_freq);
+    
     char* filepath_deshifr = (char*)xmalloc(512, sizeof(char));
-    snprintf(filepath_deshifr, 512 * sizeof(char), "de%s", shifr_filename);
+    snprintf(filepath_deshifr, 512 * sizeof(char), "FA_key_%s", shifr_filename);
     return filepath_deshifr;
 }

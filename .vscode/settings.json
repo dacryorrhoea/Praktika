@@ -4,6 +4,7 @@
     "locale.h": "c",
     "string.h": "c",
     "initializer_list": "c",
-    "cmath": "c"
+    "cmath": "c",
+    "interface.h": "c"
   }
 }
