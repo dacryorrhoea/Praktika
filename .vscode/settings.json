@@ -5,6 +5,7 @@
     "string.h": "c",
     "initializer_list": "c",
     "cmath": "c",
-    "interface.h": "c"
+    "interface.h": "c",
+    "hash_table.h": "c"
   }
 }

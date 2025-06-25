@@ -20,6 +20,7 @@ static const char *menu_items[MENU_ITEMS] = {
 static char* curr_filename = NULL;
 static char* app_content = NULL;
 static int content_offset = 0;
+static int highlight = 0;
 
 void load_and_display_file(char* filename) {
     char* result = read_file_content(filename);
@@ -71,50 +72,52 @@ void decrypt_without_key() {
     free(enc_file);
 }
 
+void draw_ui() {
+    draw_menu(menu_items, MENU_ITEMS, highlight);
+    if (app_content) {
+        draw_content(curr_filename, app_content, content_offset);         
+    } else {
+        draw_content("", "", 0);   
+    }
+}
+
+void menu_handle() {
+    switch (highlight) {
+        case 0: encrypt_file(); return;
+        case 1: decrypt_with_key(); return;
+        case 2: decrypt_without_key(); return;
+    }
+}
+
 int main() {
     init_ui();
-    int highlight = 0;
-
-    draw_menu(menu_items, MENU_ITEMS, highlight);
-    draw_content("", "", 0);
+    draw_ui();
 
     int ch;
     while ((ch = getch()) != 'q') {
         switch (ch) {
             case KEY_UP:
-                if (--highlight < 0) highlight = MENU_ITEMS - 1;
+                highlight = (highlight - 1 + MENU_ITEMS) % MENU_ITEMS;
                 break;
             case KEY_DOWN:
-                if (++highlight >= MENU_ITEMS) highlight = 0;
+                highlight = (highlight + 1) % MENU_ITEMS;
                 break;
             case 'j':
                 content_offset++;
                 break;
             case 'k':
-                if (content_offset > 0) content_offset--;
+                content_offset--;
                 break;
             case 10:
-                switch (highlight) {
-                    case 0: encrypt_file(); break;
-                    case 1: decrypt_with_key(); break;
-                    case 2: decrypt_without_key(); break;
-                }
-                break;
-            case KEY_RESIZE:
-                resize_ui();
+                menu_handle();
                 break;
         }
-        draw_menu(menu_items, MENU_ITEMS, highlight);
-        if (app_content) {
-            draw_content(curr_filename, app_content, content_offset);         
-        } else {
-            draw_content("", "", 0);   
-        }
-        
+        draw_ui();
     }
     
     close_ui();
     free(app_content);
     free(curr_filename);
+
     return 0;
 }

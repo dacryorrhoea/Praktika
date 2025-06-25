@@ -23,7 +23,9 @@ HashTable *create_hash_table(int size) {
     return table;
 }
 
-void hash_table_insert(HashTable *table, wchar_t symb, wchar_t pair_symb) {
+void hash_table_insert(
+    HashTable *table, wchar_t symb, wchar_t pair_symb
+) {
     int i = get_unicode_hash(symb, table->size);
     HashNode *node = malloc(sizeof(HashNode));
     node->symbol = symb;
